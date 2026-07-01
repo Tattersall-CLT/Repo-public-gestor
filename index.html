@@ -1,9 +1,26 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>Repo Public Gestor</title>
+  <meta charset="utf-8" />
+  <title>Tattersall - Gestor Documental - API de Ingesta</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+  <link rel="icon" type="image/png" href="https://unpkg.com/swagger-ui-dist@5/favicon-32x32.png" />
 </head>
 <body>
-    <h1>GitHub Pages funcionando</h1>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = () => {
+      window.ui = SwaggerUIBundle({
+        url: './api-spec-openapi.yaml', // Carga el yaml que está en la misma carpeta docs/
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis
+        ],
+        layout: "BaseLayout"
+      });
+    };
+  </script>
 </body>
 </html>
