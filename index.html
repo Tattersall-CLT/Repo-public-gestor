@@ -2,25 +2,51 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <title>Tattersall - Gestor Documental - API de Ingesta</title>
+  <title>Tattersall - Gestor Documental - API Docs</title>
   <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
   <link rel="icon" type="image/png" href="https://unpkg.com/swagger-ui-dist@5/favicon-32x32.png" />
+  <style>
+    .api-selector {
+      text-align: center;
+      padding: 20px;
+      background: #1b1b1b;
+    }
+    .api-selector select {
+      font-size: 16px;
+      padding: 8px 16px;
+      border-radius: 4px;
+      border: 1px solid #555;
+      background: #333;
+      color: #fff;
+    }
+    .api-selector label {
+      color: #fff;
+      font-size: 16px;
+      margin-right: 10px;
+    }
+  </style>
 </head>
 <body>
+  <div class="api-selector">
+    <label for="api-select">Seleccionar API:</label>
+    <select id="api-select" onchange="loadApi(this.value)">
+      <option value="./api-spec-openapi.yaml">API de Ingesta (Proveedores)</option>
+      <option value="./api-spec-consulta-openapi.yaml">API de Consulta (Apps Internas)</option>
+    </select>
+  </div>
   <div id="swagger-ui"></div>
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
   <script>
-    window.onload = () => {
+    function loadApi(url) {
       window.ui = SwaggerUIBundle({
-        url: './api-spec-openapi.yaml', // Carga el yaml que está en la misma carpeta docs/
+        url: url,
         dom_id: '#swagger-ui',
         deepLinking: true,
-        presets: [
-          SwaggerUIBundle.presets.apis
-        ],
+        presets: [SwaggerUIBundle.presets.apis],
         layout: "BaseLayout"
       });
-    };
+    }
+    window.onload = () => loadApi('./api-spec-openapi.yaml');
   </script>
 </body>
 </html>

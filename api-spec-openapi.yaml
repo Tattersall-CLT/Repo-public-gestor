@@ -1,141 +1,165 @@
 openapi: 3.0.3
 info:
-  title: Tattersall - Gestor Documental - API de Ingesta de Documentos
+  title: Tattersall - Gestor Documental - API de Ingesta
   description: |
-    # 📄 Tattersall Gestor Documental - API de Ingesta
-    
-    Bienvenido a la API REST del **Gestor Documental de Tattersall**. Este servicio permite a proveedores externos (satélites) realizar la carga directa de documentos vehiculares hacia la zona de aterrizaje (landing) del sistema.
+    # 📄 API de Ingesta de Documentos
+
+    API REST para que proveedores externos (satélites) carguen documentos vehiculares al sistema Gestor Documental de Tattersall.
 
     ---
 
-    ### 🚀 Inicio Rápido (Prueba de Conexión)
-    Puedes probar la API de inmediato ejecutando el siguiente comando `curl` en tu terminal (utilizando las credenciales de prueba provistas):
+    ### 🔒 Autenticación (doble capa)
+
+    Cada petición requiere **dos** credenciales simultáneas:
+
+    1. **Token JWT** — en el header `Authorization: Bearer <token>`
+    2. **API Key** — en el header `x-api-key`
+
+    ---
+
+    ### 🔑 Obtener Token JWT (paso previo)
+
+    Antes de hacer cualquier request al API, el proveedor debe obtener un token de acceso:
 
     ```bash
-    curl -X PUT "https://{apiId}.execute-api.us-east-1.amazonaws.com/dev/documents" \
-      -H "x-api-key: abcdefghijklmnopqrstuvxwyz" \
+    curl -X POST "<TOKEN_URL>" \
+      -H "Content-Type: application/x-www-form-urlencoded" \
+      -d "grant_type=client_credentials&scope=<SCOPE>" \
+      -u "<CLIENT_ID>:<CLIENT_SECRET>"
+    ```
+
+    **Datos necesarios (provistos al dar de alta al proveedor):**
+
+    | Dato | Descripción | Ejemplo |
+    |------|-------------|---------|
+    | `TOKEN_URL` | Endpoint Cognito para obtener tokens | `https://clt-bedrock-dev-auth-XXXXXX.auth.us-east-1.amazoncognito.com/oauth2/token` |
+    | `CLIENT_ID` | Identificador del proveedor | (proporcionado al dar de alta) |
+    | `CLIENT_SECRET` | Secreto del proveedor | (proporcionado al dar de alta) |
+    | `SCOPE` | Permiso solicitado | (proporcionado al dar de alta) |
+
+    **Respuesta:**
+    ```json
+    {
+      "access_token": "eyJraWQ...",
+      "expires_in": 3600,
+      "token_type": "Bearer"
+    }
+    ```
+
+    El token expira en **1 hora**. Renovar antes de que expire.
+
+    ---
+
+    ### 🚀 Ejemplo completo de carga
+
+    ```bash
+    curl -X PUT "<API_URL>/documents" \
+      -H "Authorization: Bearer <TOKEN>" \
+      -H "x-api-key: <API_KEY>" \
       -H "Content-Type: application/pdf" \
-      -H "x-provider-id: proveedor-ejemplo" \
+      -H "x-provider-id: <PROVIDER_ID>" \
       -H "x-patente: ABCD12" \
-      -H "x-vin: WDB1234567890" \
       -H "x-filename: permiso-circulacion-ABCD12.pdf" \
-      --data-binary @ruta/archivo/pdf.pdf
+      --data-binary @archivo.pdf
     ```
 
     ---
 
-    ### 🔒 Seguridad y Autenticación
-    Para consumir cualquier recurso de esta API, debes incluir tu clave de acceso en las cabeceras HTTP:
-    * **Header:** `x-api-key`
-    * **Valor:** Clave provista por el administrador (Ej. `abcdefghijklmnopqrstuvxwyz`).
-    * _Peticiones sin esta cabecera o con claves inválidas recibirán una respuesta HTTP `403 Forbidden`._
+    ### 📊 Headers requeridos en cada carga
+
+    | Header | Obligatorio | Descripción |
+    | :--- | :---: | :--- |
+    | `Authorization` | **Sí** 🔑 | `Bearer <token_jwt>` obtenido de Cognito |
+    | `x-api-key` | **Sí** 🔑 | API Key asignada al proveedor |
+    | `Content-Type` | **Sí** 📁 | `application/pdf`, `application/msword`, o `application/vnd.openxmlformats-officedocument.wordprocessingml.document` |
+    | `x-provider-id` | **Sí** 📡 | ID del proveedor asignado por administrador |
+    | `x-patente` | ⚠️ Condicional 🚗 | Patente del vehículo (al menos uno de patente o vin) |
+    | `x-vin` | ⚠️ Condicional 🚗 | VIN/chasis del vehículo (al menos uno de patente o vin) |
+    | `x-filename` | **Sí** 📄 | Nombre original del archivo con extensión |
 
     ---
 
-    ### 📊 Resumen de Cabeceras (Headers)
-
-    | Cabecera | Tipo | Obligatorio | Descripción | Ejemplo |
-    | :--- | :---: | :---: | :--- | :--- |
-    | `x-api-key` | `string` | **Sí** 🔑 | Clave de API asignada | `abcdefghijklmnopqrstuvxwyz` |
-    | `Content-Type` | `string` | **Sí** 📁 | Tipo MIME del archivo | `application/pdf` |
-    | `x-provider-id` | `string` | **Sí** 📡 | ID del proveedor (carpeta destino + auditoría) | valor otorgado por administrador de API. |
-    | `x-patente` | `string` | ⚠️ Condicional 🚗 | Patente del vehículo. Al menos uno de `x-patente` o `x-vin` es requerido. | `ABCD12` |
-    | `x-vin` | `string` | ⚠️ Condicional 🚗 | VIN (chasis) del vehículo. Al menos uno de `x-patente` o `x-vin` es requerido. | `WDB1234567890` |
-    | `x-filename` | `string` | **Sí** 📄 | Nombre original del archivo con extensión | `permiso-circulacion-ABCD12.pdf` |
+    ### 📂 Formatos de archivo aceptados
+    * 📑 `application/pdf` — Archivos PDF
+    * 📝 `application/msword` — Word (.doc)
+    * 📝 `application/vnd.openxmlformats-officedocument.wordprocessingml.document` — Word (.docx)
 
     ---
 
-    ### 📂 Formatos de Archivo Aceptados
-    El servicio acepta únicamente los siguientes tipos de contenido en el cuerpo de la petición (`body`):
-    * 📑 **PDF:** `application/pdf`
-    * 📝 **Word antiguo:** `application/msword` (`.doc`)
-    * 📝 **Word moderno:** `application/vnd.openxmlformats-officedocument.wordprocessingml.document` (`.docx`)
+    ### 📁 Estructura en S3 (landing)
+
+    Los archivos se depositan con la siguiente estructura:
+    ```
+    ingesta/source={provider_id}/{patente|vin|patente-vin}/{nombre}-{timestamp}-{id}.ext
+    ```
 
     ---
 
-    ### ⚙️ Límites del Servicio
-    * **Tamaño Máximo:** `10 MB` por archivo (límite físico de API Gateway).
-    * **Rate Limiting:** `20 peticiones/segundo` por API Key.
-    * **Burst Limit:** `50 peticiones` concurrentes.
-    * **Cuota Diaria:** `5,000 peticiones/día` por API Key.
-  version: 3.0.0
+    ### ⚙️ Límites
+    * **Tamaño máximo:** 10 MB por archivo
+    * **Rate Limit:** 20 requests/segundo por API Key
+    * **Burst:** 50 requests concurrentes
+    * **Quota:** 5,000 requests/día por API Key
+    * **Token JWT:** expira en 1 hora
+  version: 4.0.0
   contact:
     name: Equipo Escala 24x7
 
 servers:
-  - url: https://{apiId}.execute-api.us-east-1.amazonaws.com/dev
-    description: Ambiente Desarrollo (Plantilla)
+  - url: https://{apiId}.execute-api.us-east-1.amazonaws.com/Prod
+    description: Ambiente Desarrollo
     variables:
       apiId:
-        default: "REMPLAZAR_CON_API_ID"
+        default: "REPLACE"
 
 security:
+  - BearerAuth: []
   - ApiKeyAuth: []
 
 tags:
-  - name: Ingesta de Documentos
-    description: Operaciones para cargar archivos digitales a la zona de landing del sistema.
+  - name: Ingesta
+    description: Carga de documentos vehiculares.
 
 paths:
   /documents:
     put:
       tags:
-        - Ingesta de Documentos
+        - Ingesta
       summary: Carga directa de documento vehicular
       description: |
-        Sube un archivo PDF o Word directamente en formato binario a la zona de landing.
-        El tamaño del archivo no debe exceder los 10 MB.
-        
-        **El proveedor NO necesita clasificar el documento** — solo identificarse y enviar el archivo con su nombre original. La clasificación (tipo de documento, extracción de patente/VIN) se realiza automáticamente en una etapa posterior.
+        Sube un archivo PDF o Word al sistema. Requiere token JWT + API Key.
+        Al menos uno de `x-patente` o `x-vin` debe estar presente.
       operationId: uploadDocument
-      security:
-        - ApiKeyAuth: []
       parameters:
         - name: x-provider-id
           in: header
           required: true
-          description: |
-            Identificador único del proveedor o satélite. Determina la carpeta de destino en el bucket y se usa para trazabilidad y auditoría.
-            
-            **Valores permitidos:** Administrador de API otorgará valor permitido.
-            
-            Para solicitar un nuevo provider_id, contactar al equipo de administración.
+          description: ID del proveedor asignado por administrador.
           schema:
             type: string
-            enum:
-              - proveedor1
-              - proveedor2
-              - proveedorN
-            example: "nombre_proveedor"
+            example: "proveedor-ejemplo"
         - name: x-patente
           in: header
           required: false
-          description: |
-            Patente (placa) del vehículo asociado al documento.
-            **Al menos uno de `x-patente` o `x-vin` debe estar presente.**
-            Si se tienen ambos, enviar ambos.
+          description: Patente del vehículo. Al menos uno de x-patente o x-vin es requerido.
           schema:
             type: string
             example: "ABCD12"
         - name: x-vin
           in: header
           required: false
-          description: |
-            VIN (número de chasis) del vehículo asociado al documento.
-            **Al menos uno de `x-patente` o `x-vin` debe estar presente.**
-            Si se tienen ambos, enviar ambos.
+          description: VIN (chasis) del vehículo. Al menos uno de x-patente o x-vin es requerido.
           schema:
             type: string
             example: "WDB1234567890"
         - name: x-filename
           in: header
           required: true
-          description: Nombre original del archivo, incluyendo la extensión (.pdf, .doc, .docx).
+          description: Nombre original del archivo con extensión.
           schema:
             type: string
             example: "permiso-circulacion-ABCD12.pdf"
       requestBody:
-        description: Contenido binario del archivo a subir.
         required: true
         content:
           application/pdf:
@@ -152,7 +176,7 @@ paths:
               format: binary
       responses:
         '200':
-          description: Documento subido exitosamente a la zona de landing
+          description: Documento subido exitosamente
           content:
             application/json:
               schema:
@@ -160,110 +184,66 @@ paths:
               example:
                 message: "Documento subido exitosamente"
                 upload_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-                s3_key: "ingesta/proveedor-ejemplo/ABCD12-WDB1234567890/permiso-circulacion-abcd12-20260624_152040-8d0323e7.pdf"
+                s3_key: "ingesta/source=proveedor/patente=ABCD12/archivo-20260720-8d03.pdf"
                 size_bytes: 245000
         '400':
-          description: Error en la validación de cabeceras o tipo de archivo no soportado
+          description: Error de validación (headers faltantes o formato incorrecto)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ValidationError'
-              examples:
-                missing_headers:
-                  summary: Cabeceras Requeridas Faltantes
-                  value:
-                    errors:
-                      - "Header x-provider-id es requerido"
-                      - "Al menos uno de los headers x-patente o x-vin es requerido"
-                      - "Header x-filename es requerido"
-                    upload_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-                invalid_content_type:
-                  summary: Content-Type No Soportado
-                  value:
-                    errors:
-                      - "Content-Type no soportado. Permitidos: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']"
-                    upload_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                errors:
+                  - "Header x-provider-id es requerido"
+                  - "Al menos uno de los headers x-patente o x-vin es requerido"
+                upload_id: "a1b2c3d4-e5f6-7890"
+        '401':
+          description: Token JWT inválido, expirado, o no proporcionado
+          content:
+            application/json:
+              example:
+                message: "Unauthorized"
         '403':
-          description: Clave de API no provista, expirada o no autorizada
+          description: API Key inválida o no proporcionada
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/ForbiddenError'
               example:
                 message: "Forbidden"
-        '500':
-          description: Falla interna durante el procesamiento del archivo en el servidor
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InternalError'
 
 components:
   securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenido via OAuth2 client_credentials desde Cognito.
     ApiKeyAuth:
       type: apiKey
       in: header
       name: x-api-key
-      description: |
-        Clave de API de autenticación.
-        
-        * **Para Pruebas:** Solicite una clave única al equipo de Tattersall / Escala 24x7.
-        * **Para Producción:** Solicite una clave única al equipo de Tattersall / Escala 24x7.
+      description: API Key asignada a cada proveedor.
 
   schemas:
     UploadSuccess:
       type: object
-      description: Respuesta exitosa tras cargar correctamente un documento.
       properties:
         message:
           type: string
-          description: Mensaje descriptivo del estado.
-          example: "Documento subido exitosamente"
         upload_id:
           type: string
           format: uuid
-          description: Identificador único universal (UUID) de la transacción para auditorías.
-          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
         s3_key:
           type: string
-          description: Ruta exacta donde quedó almacenado el archivo en el bucket S3.
-          example: "ingesta/proveedor-ejemplo/ABCD12-WDB1234567890/permiso-circulacion-abcd12-20260624_152040-8d0323e7.pdf"
         size_bytes:
           type: integer
-          description: Tamaño final del archivo almacenado, en bytes.
-          example: 245000
 
-    ValidationError:
+    ErrorResponse:
       type: object
-      description: Respuesta devuelta cuando los metadatos o el archivo no cumplen las validaciones.
       properties:
         errors:
           type: array
           items:
             type: string
-          description: Colección de mensajes que detallan las fallas encontradas.
-          example:
-            - "Header x-provider-id es requerido"
         upload_id:
           type: string
           format: uuid
-          description: ID único para el registro e historial de la transacción fallida.
-          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-
-    ForbiddenError:
-      type: object
-      description: Respuesta de error de autenticación.
-      properties:
-        message:
-          type: string
-          description: Razón de denegación.
-          example: "Forbidden"
-
-    InternalError:
-      type: object
-      description: Respuesta cuando ocurre un problema no controlado del lado del servidor.
-      properties:
-        error:
-          type: string
-          description: Detalles descriptivos de la falla.
-          example: "Error interno al subir archivo"
