@@ -1,0 +1,297 @@
+openapi: 3.0.3
+info:
+  title: Tattersall - Gestor Documental - API de Consulta
+  description: |
+    # 📄 API de Consulta de Documentos
+
+    API REST para que aplicaciones internas de Tattersall consulten, descarguen y actualicen documentos vehiculares procesados.
+
+    ---
+
+    ### 🔒 Autenticación (doble capa)
+
+    Cada petición requiere **dos** credenciales simultáneas:
+
+    1. **Token JWT** — en el header `Authorization: Bearer <token>`
+    2. **API Key** — en el header `x-api-key`
+
+    ---
+
+    ### 🔑 Obtener Token JWT (paso previo)
+
+    ```bash
+    curl -X POST "<TOKEN_URL>" \
+      -H "Content-Type: application/x-www-form-urlencoded" \
+      -d "grant_type=client_credentials&scope=<SCOPE>" \
+      -u "<CLIENT_ID>:<CLIENT_SECRET>"
+    ```
+
+    **Datos necesarios (provistos al dar de alta la aplicación):**
+
+    | Dato | Descripción |
+    |------|-------------|
+    | `TOKEN_URL` | Endpoint Cognito para obtener tokens |
+    | `CLIENT_ID` | Identificador de la aplicación |
+    | `CLIENT_SECRET` | Secreto de la aplicación |
+    | `SCOPE` | Permiso de consulta |
+
+    **Respuesta:**
+    ```json
+    {
+      "access_token": "eyJraWQ...",
+      "expires_in": 3600,
+      "token_type": "Bearer"
+    }
+    ```
+
+    El token expira en **1 hora**. Renovar antes de que expire.
+
+    ---
+
+    ### 📊 Endpoints disponibles
+
+    | Método | Path | Descripción |
+    | :--- | :--- | :--- |
+    | `GET` | `/metadata` | Consultar documentos por patente o VIN |
+    | `PUT` | `/metadata/{id}` | Actualizar metadata de un documento |
+    | `GET` | `/docprocesado/{id}` | Obtener URL temporal para descargar archivo |
+
+    ---
+
+    ### ⚙️ Límites
+    * **Rate Limit:** 100 requests/segundo por API Key
+    * **Burst:** 200 requests concurrentes
+    * **Quota:** 50,000 requests/mes por API Key
+    * **Token JWT:** expira en 1 hora
+    * **Pre-signed URL descarga:** válida por 1 hora
+  version: 1.0.0
+  contact:
+    name: Equipo Escala 24x7
+
+servers:
+  - url: https://{apiId}.execute-api.us-east-1.amazonaws.com/Prod
+    description: Ambiente Desarrollo
+    variables:
+      apiId:
+        default: "REPLACE"
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+tags:
+  - name: Metadata
+    description: Consulta y actualización de metadata de documentos procesados.
+  - name: Descarga
+    description: Obtención de URLs temporales para descargar archivos.
+
+paths:
+  /metadata:
+    get:
+      tags:
+        - Metadata
+      summary: Consultar documentos por patente o VIN
+      description: |
+        Busca documentos procesados por patente o VIN.
+        Devuelve metadata extraída por Bedrock. Al menos uno de los parámetros debe estar presente.
+      operationId: getMetadata
+      parameters:
+        - name: patente
+          in: query
+          required: false
+          description: Patente del vehículo.
+          schema:
+            type: string
+            example: "ABCD12"
+        - name: vin
+          in: query
+          required: false
+          description: VIN (chasis) del vehículo.
+          schema:
+            type: string
+            example: "WDB1234567890"
+        - name: tipo_documental
+          in: query
+          required: false
+          description: Filtrar por tipo de documento (opcional).
+          schema:
+            type: string
+            example: "permiso-circulacion"
+      responses:
+        '200':
+          description: Lista de documentos encontrados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetadataListResponse'
+              example:
+                documents:
+                  - document_id: "a1b2c3d4-e5f6-7890"
+                    patente: "ABCD12"
+                    vin: "WDB1234567890"
+                    tipo_documental: "permiso-circulacion"
+                    fecha_emision: "2026-03-11"
+                    fecha_vencimiento: "2027-03-31"
+                    status: "procesado"
+                  - document_id: "b2c3d4e5-f6a7-8901"
+                    patente: "ABCD12"
+                    vin: "WDB1234567890"
+                    tipo_documental: "revision-tecnica"
+                    fecha_revision: "2026-01-15"
+                    resultado: "APROBADO"
+                    status: "procesado"
+                count: 2
+        '400':
+          description: Debe proporcionar al menos patente o vin
+          content:
+            application/json:
+              example:
+                error: "Debe proporcionar al menos un parametro: patente o vin"
+        '401':
+          description: Token JWT inválido o expirado
+          content:
+            application/json:
+              example:
+                message: "Unauthorized"
+        '403':
+          description: API Key inválida
+          content:
+            application/json:
+              example:
+                message: "Forbidden"
+
+  /metadata/{id}:
+    put:
+      tags:
+        - Metadata
+      summary: Actualizar metadata de un documento
+      description: |
+        Actualiza campos de metadata de un documento procesado.
+        Solo enviar los campos a modificar.
+      operationId: updateMetadata
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID único del documento (document_id).
+          schema:
+            type: string
+            example: "a1b2c3d4-e5f6-7890"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetadataUpdateRequest'
+            example:
+              patente: "XXYY99"
+              observaciones: "Correccion de patente"
+      responses:
+        '200':
+          description: Metadata actualizada
+          content:
+            application/json:
+              example:
+                message: "Metadata actualizada exitosamente"
+                document_id: "a1b2c3d4-e5f6-7890"
+                updated_fields: ["patente", "observaciones"]
+        '404':
+          description: Documento no encontrado
+          content:
+            application/json:
+              example:
+                error: "Documento no encontrado"
+        '401':
+          description: Token JWT inválido o expirado
+        '403':
+          description: API Key inválida
+
+  /docprocesado/{id}:
+    get:
+      tags:
+        - Descarga
+      summary: Obtener URL temporal para descargar documento
+      description: |
+        Genera una URL pre-firmada (válida 1 hora) para descargar el archivo procesado desde S3.
+
+        **Flujo:**
+        1. Llamar este endpoint con el `document_id`
+        2. Recibir `download_url` en la respuesta
+        3. Hacer GET a esa URL para descargar (sin headers adicionales)
+      operationId: getDocumentDownload
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID único del documento.
+          schema:
+            type: string
+            example: "a1b2c3d4-e5f6-7890"
+      responses:
+        '200':
+          description: URL de descarga generada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadResponse'
+              example:
+                document_id: "a1b2c3d4-e5f6-7890"
+                download_url: "https://bucket.s3.amazonaws.com/vault/permiso-circulacion/ABCD12/archivo.pdf?X-Amz-..."
+                expires_in_seconds: 3600
+                content_type: "application/pdf"
+                filename: "permiso-circulacion-ABCD12.pdf"
+        '404':
+          description: Documento no encontrado
+          content:
+            application/json:
+              example:
+                error: "Documento no encontrado"
+        '401':
+          description: Token JWT inválido o expirado
+        '403':
+          description: API Key inválida
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenido via OAuth2 client_credentials desde Cognito.
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: API Key asignada a cada aplicación consumidora.
+
+  schemas:
+    MetadataListResponse:
+      type: object
+      properties:
+        documents:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        count:
+          type: integer
+
+    MetadataUpdateRequest:
+      type: object
+      description: Campos a actualizar (solo enviar los que se modifiquen).
+      additionalProperties: true
+
+    DownloadResponse:
+      type: object
+      properties:
+        document_id:
+          type: string
+        download_url:
+          type: string
+          format: uri
+        expires_in_seconds:
+          type: integer
+        content_type:
+          type: string
+        filename:
+          type: string
