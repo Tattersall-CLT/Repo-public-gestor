@@ -60,6 +60,7 @@ info:
       -H "x-provider-id: <PROVIDER_ID>" \
       -H "x-patente: ABCD12" \
       -H "x-filename: permiso-circulacion-ABCD12.pdf" \
+      -H "x-notification-email: operador@proveedor.cl" \
       --data-binary @archivo.pdf
     ```
 
@@ -76,6 +77,22 @@ info:
     | `x-patente` | ⚠️ Condicional 🚗 | Patente del vehículo (al menos uno de patente o vin) |
     | `x-vin` | ⚠️ Condicional 🚗 | VIN/chasis del vehículo (al menos uno de patente o vin) |
     | `x-filename` | **Sí** 📄 | Nombre original del archivo con extensión |
+    | `x-notification-email` | No ✉️ | Email del responsable de la carga. Si el documento es rechazado, la notificación se envía a esta dirección |
+
+    ---
+
+    ### ✉️ Notificaciones de rechazo
+
+    Cuando un documento es rechazado durante el procesamiento, el sistema emite una notificación
+    indicando el archivo, el motivo del rechazo, el proveedor y la fecha.
+
+    * **Sin `x-notification-email`:** la notificación llega únicamente a la lista de distribución
+      del equipo de administración.
+    * **Con `x-notification-email`:** la notificación se dirige además al responsable de la carga,
+      permitiendo corregir y recargar el documento sin intermediarios.
+
+    Motivos de rechazo más frecuentes: archivo vacío o corrupto, formato no soportado,
+    tipo documental no reconocido, baja legibilidad y campos obligatorios ausentes.
 
     ---
 
@@ -101,7 +118,7 @@ info:
     * **Burst:** 50 requests concurrentes
     * **Quota:** 5,000 requests/día por API Key
     * **Token JWT:** expira en 1 hora
-  version: 4.0.0
+  version: 4.1.0
   contact:
     name: Equipo Escala 24x7
 
@@ -129,6 +146,9 @@ paths:
       description: |
         Sube un archivo PDF o Word al sistema. Requiere token JWT + API Key.
         Al menos uno de `x-patente` o `x-vin` debe estar presente.
+
+        Opcionalmente, el header `x-notification-email` permite recibir la
+        notificación de rechazo directamente en el correo del responsable de la carga.
       operationId: uploadDocument
       parameters:
         - name: x-provider-id
@@ -159,6 +179,23 @@ paths:
           schema:
             type: string
             example: "permiso-circulacion-ABCD12.pdf"
+        - name: x-notification-email
+          in: header
+          required: false
+          description: |
+            Email del responsable de la carga. **Opcional pero recomendado.**
+
+            Si el documento es rechazado durante el procesamiento (formato inválido,
+            baja legibilidad, tipo documental no reconocido, campos obligatorios
+            ausentes), la notificación se envía directamente a esta dirección.
+
+            **Si se omite:** la notificación de rechazo se envía únicamente a la
+            lista de distribución general del equipo de administración, sin
+            identificar al responsable de la carga.
+          schema:
+            type: string
+            format: email
+            example: "operador@proveedor.cl"
       requestBody:
         required: true
         content:
