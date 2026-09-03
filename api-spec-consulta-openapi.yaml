@@ -52,7 +52,7 @@ info:
 
     | Método | Path | Descripción |
     | :--- | :--- | :--- |
-    | `GET` | `/metadata` | Consultar documentos por patente o VIN |
+    | `GET` | `/metadata` | Consultar documentos por patente, VIN o numero_certificado |
     | `PUT` | `/metadata/{id}` | Actualizar metadata de un documento |
     | `GET` | `/docprocesado/{id}` | Obtener URL temporal para descargar archivo |
 
@@ -64,7 +64,7 @@ info:
     * **Quota:** 50,000 requests/mes por API Key
     * **Token JWT:** expira en 1 hora
     * **Pre-signed URL descarga:** válida por 1 hora
-  version: 1.0.0
+  version: 1.1.0
   contact:
     name: Equipo Escala 24x7
 
@@ -90,10 +90,17 @@ paths:
     get:
       tags:
         - Metadata
-      summary: Consultar documentos por patente o VIN
+      summary: Consultar documentos por patente, VIN o numero_certificado
       description: |
-        Busca documentos procesados por patente o VIN.
-        Devuelve metadata extraída por Bedrock. Al menos uno de los parámetros debe estar presente.
+        Busca documentos procesados por patente, VIN o numero_certificado.
+        Devuelve metadata extraída por Bedrock. Debe proporcionarse exactamente
+        uno de los tres parámetros. Si se envía más de uno, el orden de
+        prioridad es: patente > vin > numero_certificado.
+
+        El parámetro `numero_certificado` es necesario para tipos documentales
+        que no tienen patente ni VIN asociado (por ejemplo, `CertLoteProducto`
+        y `CertVehiculoServicio`), donde el número de certificado es el único
+        identificador de negocio disponible.
       operationId: getMetadata
       parameters:
         - name: patente
@@ -110,13 +117,15 @@ paths:
           schema:
             type: string
             example: "WDB1234567890"
-        - name: tipo_documental
+        - name: numero_certificado
           in: query
           required: false
-          description: Filtrar por tipo de documento (opcional).
+          description: |
+            Número de certificado a consultar. Usar para documentos sin
+            patente/VIN asociado (CertLoteProducto, CertVehiculoServicio).
           schema:
             type: string
-            example: "permiso-circulacion"
+            example: "260017IINSAN-IIN01-CR56"
       responses:
         '200':
           description: Lista de documentos encontrados
@@ -142,11 +151,11 @@ paths:
                     status: "procesado"
                 count: 2
         '400':
-          description: Debe proporcionar al menos patente o vin
+          description: Debe proporcionar patente, vin o numero_certificado
           content:
             application/json:
               example:
-                error: "Debe proporcionar al menos un parametro: patente o vin"
+                message: "Debe proporcionar el parametro 'patente', 'vin' o 'numero_certificado' en la query string"
         '401':
           description: Token JWT inválido o expirado
           content:
